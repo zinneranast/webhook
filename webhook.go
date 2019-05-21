@@ -207,7 +207,7 @@ func main() {
 
 func hookHandler(w http.ResponseWriter, r *http.Request) {
 
-	d.Dispatch(func() {
+	// d.Dispatch(func() {
 
 		// generate a request id for logging
 		rid := uuid.NewV4().String()[:6]
@@ -329,7 +329,7 @@ func hookHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "Hook not found.")
 		}
-	})
+	// })
 }
 
 func handleHook(h *hook.Hook, rid string, headers, query, payload *map[string]interface{}, body *[]byte) (string, error) {
