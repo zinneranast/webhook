@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adnanh/zinneranast/hook"
+	"github.com/zinneranast/webhook/hook"
 	"github.com/borderstech/artifex"
 
 	"github.com/codegangsta/negroni"
