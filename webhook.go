@@ -206,66 +206,66 @@ func main() {
 }
 
 func hookHandler(w http.ResponseWriter, r *http.Request) {
-
-	d.Dispatch(func() {
 		
-		// generate a request id for logging
-		rid := uuid.NewV4().String()[:6]
+	// generate a request id for logging
+	rid := uuid.NewV4().String()[:6]
 
-		log.Printf("[%s] incoming HTTP request from %s\n", rid, r.RemoteAddr)
+	log.Printf("[%s] incoming HTTP request from %s\n", rid, r.RemoteAddr)
 
-		for _, responseHeader := range responseHeaders {
-			w.Header().Set(responseHeader.Name, responseHeader.Value)
+	for _, responseHeader := range responseHeaders {
+		w.Header().Set(responseHeader.Name, responseHeader.Value)
+	}
+
+	id := mux.Vars(r)["id"]
+
+	if matchedHook := matchLoadedHook(id); matchedHook != nil {
+		log.Printf("[%s] %s got matched\n", rid, id)
+
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("[%s] error reading the request body. %+v\n", rid, err)
 		}
 
-		id := mux.Vars(r)["id"]
+		// parse headers
+		headers := valuesToMap(r.Header)
 
-		if matchedHook := matchLoadedHook(id); matchedHook != nil {
-			log.Printf("[%s] %s got matched\n", rid, id)
+		// parse query variables
+		query := valuesToMap(r.URL.Query())
 
-			body, err := ioutil.ReadAll(r.Body)
+		// parse body
+		var payload map[string]interface{}
+
+		// set contentType to IncomingPayloadContentType or header value
+		contentType := r.Header.Get("Content-Type")
+		if len(matchedHook.IncomingPayloadContentType) != 0 {
+			contentType = matchedHook.IncomingPayloadContentType
+		}
+
+		if strings.Contains(contentType, "json") {
+			decoder := json.NewDecoder(strings.NewReader(string(body)))
+			decoder.UseNumber()
+
+			err := decoder.Decode(&payload)
+
 			if err != nil {
-				log.Printf("[%s] error reading the request body. %+v\n", rid, err)
+				log.Printf("[%s] error parsing JSON payload %+v\n", rid, err)
 			}
-
-			// parse headers
-			headers := valuesToMap(r.Header)
-
-			// parse query variables
-			query := valuesToMap(r.URL.Query())
-
-			// parse body
-			var payload map[string]interface{}
-
-			// set contentType to IncomingPayloadContentType or header value
-			contentType := r.Header.Get("Content-Type")
-			if len(matchedHook.IncomingPayloadContentType) != 0 {
-				contentType = matchedHook.IncomingPayloadContentType
+		} else if strings.Contains(contentType, "form") {
+			fd, err := url.ParseQuery(string(body))
+			if err != nil {
+				log.Printf("[%s] error parsing form payload %+v\n", rid, err)
+			} else {
+				payload = valuesToMap(fd)
 			}
+		}
 
-			if strings.Contains(contentType, "json") {
-				decoder := json.NewDecoder(strings.NewReader(string(body)))
-				decoder.UseNumber()
+		// handle hook
+		errors := matchedHook.ParseJSONParameters(&headers, &query, &payload)
+		for _, err := range errors {
+			log.Printf("[%s] error parsing JSON parameters: %s\n", rid, err)
+		}			
 
-				err := decoder.Decode(&payload)
-
-				if err != nil {
-					log.Printf("[%s] error parsing JSON payload %+v\n", rid, err)
-				}
-			} else if strings.Contains(contentType, "form") {
-				fd, err := url.ParseQuery(string(body))
-				if err != nil {
-					log.Printf("[%s] error parsing form payload %+v\n", rid, err)
-				} else {
-					payload = valuesToMap(fd)
-				}
-			}
-
-			// handle hook
-			errors := matchedHook.ParseJSONParameters(&headers, &query, &payload)
-			for _, err := range errors {
-				log.Printf("[%s] error parsing JSON parameters: %s\n", rid, err)
-			}
+		d.Dispatch(func() {
 
 			var ok bool
 
